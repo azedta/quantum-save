@@ -8,8 +8,10 @@ import com.quantumsave.quantum_save.entity.ProfileEntity;
 import com.quantumsave.quantum_save.repository.CategoryRepository;
 import com.quantumsave.quantum_save.repository.IncomeRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -50,6 +52,27 @@ public class IncomeService {
             throw new RuntimeException("Unauthorized to deleted this income");
         }
         incomeRepository.delete(entity);
+    }
+
+    // Get Latest 5 Incomes for Current User (For Dashboard)
+    public List<IncomeDTO> getLatest5IncomesForCurrentUser() {
+        ProfileEntity profile = profileService.getCurrentProfile();
+        List<IncomeEntity> list = incomeRepository.findTop5ByProfileIdOrderByDateDesc(profile.getId());
+        return list.stream().map(this::toDTO).toList();
+    }
+
+    // Get Total Incomes Of Current User
+    public BigDecimal getTotalIncomeForCurrentUser() {
+        ProfileEntity profile = profileService.getCurrentProfile();
+        BigDecimal totalIncome = incomeRepository.findTotalIncomeByProfileId(profile.getId());
+        return totalIncome != null ? totalIncome : BigDecimal.ZERO;
+    }
+
+    // Filter Incomes
+    public List<IncomeDTO> filterIncomes(LocalDate startDate, LocalDate endDate, String keyword, Sort sort) {
+        ProfileEntity profile = profileService.getCurrentProfile();
+        List<IncomeEntity> list = incomeRepository.findByProfileIdAndDateBetweenAndNameContainingIgnoreCase(profile.getId(), startDate, endDate, keyword, sort);
+        return list.stream().map(this::toDTO).toList();
     }
 
     // Helper Methods

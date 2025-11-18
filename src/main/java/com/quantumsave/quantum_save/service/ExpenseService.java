@@ -7,8 +7,11 @@ import com.quantumsave.quantum_save.entity.ProfileEntity;
 import com.quantumsave.quantum_save.repository.CategoryRepository;
 import com.quantumsave.quantum_save.repository.ExpenseRepository;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.math3.analysis.function.Exp;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -50,6 +53,27 @@ public class ExpenseService {
             throw new RuntimeException("Unauthorized to deleted this expense");
         }
         expenseRepository.delete(entity);
+    }
+
+    // Get Latest 5 Expenses for Current User (For Dashboard)
+    public List<ExpenseDTO> getLatest5ExpensesForCurrentUser() {
+        ProfileEntity profile = profileService.getCurrentProfile();
+        List<ExpenseEntity> list = expenseRepository.findTop5ByProfileIdOrderByDateDesc(profile.getId());
+        return list.stream().map(this::toDTO).toList();
+    }
+
+    // Get Total Expenses Of Current User
+    public BigDecimal getTotalExpenseForCurrentUser() {
+        ProfileEntity profile = profileService.getCurrentProfile();
+        BigDecimal totalExpense = expenseRepository.findTotalExpenseByProfileId(profile.getId());
+        return totalExpense != null ? totalExpense : BigDecimal.ZERO;
+    }
+
+    // Filter Expenses
+    public List<ExpenseDTO> filterExpenses(LocalDate startDate, LocalDate endDate, String keyword, Sort sort) {
+        ProfileEntity profile = profileService.getCurrentProfile();
+        List<ExpenseEntity> list = expenseRepository.findByProfileIdAndDateBetweenAndNameContainingIgnoreCase(profile.getId(), startDate, endDate, keyword, sort);
+        return list.stream().map(this::toDTO).toList();
     }
 
 
