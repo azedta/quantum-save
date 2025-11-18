@@ -7,6 +7,7 @@ import com.quantumsave.quantum_save.entity.ProfileEntity;
 import com.quantumsave.quantum_save.repository.ProfileRepository;
 import com.quantumsave.quantum_save.util.JWTUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -29,6 +30,9 @@ public class ProfileService {
     private final AuthenticationManager authenticationManager;
     private final JWTUtil jwtUtil;
 
+    @Value("${app.activation.url}")
+    private String activationURL;
+
     public ProfileDTO registerProfile(ProfileDTO profileDTO) {
 
         ProfileEntity newProfile = toEntity(profileDTO);
@@ -36,7 +40,7 @@ public class ProfileService {
         newProfile = profileRepository.save(newProfile);
 
         // Send Activation Email
-        String activationLink = "http://localhost:8080/api/v1.0/activate?token=" + newProfile.getActivationToken();
+        String activationLink = activationURL +"/api/v1.0/activate?token=" + newProfile.getActivationToken();
         String subject = "Activate Your Quantum Save Account";
 
         String body = "Hello " + newProfile.getFullName() + ",\n\n" +

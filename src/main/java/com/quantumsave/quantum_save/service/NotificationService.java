@@ -100,7 +100,7 @@ public class NotificationService {
                                 + "Best regards,<br/>"
                                 + "<strong>Quantum Save Team</strong>"
                                 + "</div>";
-                emailService.sendEmail(profile.getEmail(), "Your Daily Expense Summary", body);
+                emailService.sendEmail(profile.getEmail(), "Today’s Expense Summary – Quantum Save", body);
             }
         }
         log.info("Job Completed :Sending Daily Expense Summary");
