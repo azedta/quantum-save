@@ -24,6 +24,6 @@ WORKDIR /app
 # Copy jar from the build stage
 COPY --from=build /app/target/quantum-save-0.0.1-SNAPSHOT.jar quantum-save-v1.0.jar
 
-EXPOSE 9090
+EXPOSE 8080
 
 ENTRYPOINT ["java", "-jar", "quantum-save-v1.0.jar"]
