@@ -35,23 +35,40 @@ public class ProfileService {
 
     public ProfileDTO registerProfile(ProfileDTO profileDTO) {
 
+        // 1. Check if the email already exists
+        if (profileRepository.existsByEmail(profileDTO.getEmail())) {
+            throw new IllegalArgumentException("Email is already registered");
+        }
+
+        // 2. Convert DTO to entity
         ProfileEntity newProfile = toEntity(profileDTO);
+        newProfile.setIsActive(false);
         newProfile.setActivationToken(UUID.randomUUID().toString());
+
+        // 3. Save profile
         newProfile = profileRepository.save(newProfile);
 
-        // Send Activation Email
-        String activationLink = activationURL +"/api/v1.0/activate?token=" + newProfile.getActivationToken();
-        String subject = "Activate Your Quantum Save Account";
+        // 4. Send activation email
+        // Try to send activation email, but don't kill the request if it fails
+        try {
+            String activationLink = activationURL + "/api/v1.0/activate?token=" + newProfile.getActivationToken();
+            String subject = "Activate Your Quantum Save Account";
 
-        String body = "Hello " + newProfile.getFullName() + ",\n\n" +
-                "Welcome to Quantum Save — we're excited to have you on board!\n\n" +
-                "To complete your registration and start tracking your expenses, please activate your account by clicking the link below:\n\n" +
-                activationLink + "\n\n" +
-                "If you didn’t create an account with Quantum Save, please ignore this email.\n\n" +
-                "Thank you,\n" +
-                "The Quantum Save Team";
+            String body = "Hello " + newProfile.getFullName() + ",\n\n" +
+                    "Welcome to Quantum Save — we're excited to have you on board!\n\n" +
+                    "To complete your registration and start tracking your expenses, please activate your account by clicking the link below:\n\n" +
+                    activationLink + "\n\n" +
+                    "If you didn’t create an account with Quantum Save, please ignore this email.\n\n" +
+                    "Thank you,\n" +
+                    "The Quantum Save Team";
 
-        emailService.sendEmail(newProfile.getEmail(), subject, body);
+            emailService.sendEmail(newProfile.getEmail(), subject, body);
+        } catch (Exception e) {
+            // log but don't break registration
+            System.out.println("Failed to send activation email: " + e.getMessage());
+            // or use a logger
+            // log.warn("Failed to send activation email to {}", newProfile.getEmail(), e);
+        }
 
         return toDTO(newProfile);
     }
