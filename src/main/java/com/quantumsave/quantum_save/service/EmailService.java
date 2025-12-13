@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,43 +37,88 @@ public class EmailService {
 
     /**
      * Sends a plain-text email via Brevo HTTP API.
-     * This keeps the same signature used across your app.
      */
     public void sendEmail(String toEmail, String subject, String body) {
         try {
-            // Build JSON payload according to Brevo's /v3/smtp/email API
-            Map<String, Object> payload = new HashMap<>();
-
-            Map<String, String> sender = new HashMap<>();
-            sender.put("email", senderEmail);
-            sender.put("name", senderName);
-            payload.put("sender", sender);
-
-            Map<String, String> to = new HashMap<>();
-            to.put("email", toEmail);
-            payload.put("to", List.of(to));
-
-            payload.put("subject", subject);
-            // You can also use "htmlContent" if you want HTML emails
+            Map<String, Object> payload = basePayload(toEmail, subject);
             payload.put("textContent", body);
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("api-key", brevoApiKey);
-            headers.set("accept", "application/json");
-
-            HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(payload, headers);
-
-            ResponseEntity<String> response =
-                    restTemplate.postForEntity(brevoApiUrl, requestEntity, String.class);
+            ResponseEntity<String> response = restTemplate.postForEntity(
+                    brevoApiUrl,
+                    new HttpEntity<>(payload, buildHeaders()),
+                    String.class
+            );
 
             log.info("Brevo email sent to {} – status: {}", toEmail, response.getStatusCode());
 
         } catch (RestClientException e) {
-            // Do NOT break registration/login if email fails
             log.warn("Failed to send email via Brevo to {}: {}", toEmail, e.getMessage());
         } catch (Exception e) {
             log.error("Unexpected error while sending email via Brevo to {}", toEmail, e);
         }
+    }
+
+    /**
+     * Sends an email with ONE attachment via Brevo HTTP API.
+     * Attachment content must be Base64.
+     */
+    public void sendEmailWithAttachment(
+            String toEmail,
+            String subject,
+            String body,
+            String filename,
+            byte[] fileBytes
+    ) {
+        try {
+            Map<String, Object> payload = basePayload(toEmail, subject);
+            payload.put("textContent", body);
+
+            String base64 = Base64.getEncoder().encodeToString(fileBytes);
+
+            Map<String, Object> attachment = new HashMap<>();
+            attachment.put("name", filename);
+            attachment.put("content", base64);
+
+            // Brevo expects an array of attachments
+            payload.put("attachment", List.of(attachment));
+
+            ResponseEntity<String> response = restTemplate.postForEntity(
+                    brevoApiUrl,
+                    new HttpEntity<>(payload, buildHeaders()),
+                    String.class
+            );
+
+            log.info("Brevo email with attachment sent to {} – status: {}", toEmail, response.getStatusCode());
+
+        } catch (RestClientException e) {
+            log.warn("Failed to send email with attachment via Brevo to {}: {}", toEmail, e.getMessage());
+        } catch (Exception e) {
+            log.error("Unexpected error while sending email with attachment via Brevo to {}", toEmail, e);
+        }
+    }
+
+    private Map<String, Object> basePayload(String toEmail, String subject) {
+        Map<String, Object> payload = new HashMap<>();
+
+        Map<String, String> sender = new HashMap<>();
+        sender.put("email", senderEmail);
+        sender.put("name", senderName);
+        payload.put("sender", sender);
+
+        Map<String, String> to = new HashMap<>();
+        to.put("email", toEmail);
+        payload.put("to", List.of(to));
+
+        payload.put("subject", subject);
+
+        return payload;
+    }
+
+    private HttpHeaders buildHeaders() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("api-key", brevoApiKey);
+        headers.set("accept", "application/json");
+        return headers;
     }
 }
