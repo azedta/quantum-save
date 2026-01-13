@@ -15,6 +15,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import com.quantumsave.quantum_save.dto.AuthResponseDTO;
+
 
 import java.util.Map;
 import java.util.UUID;
@@ -30,8 +32,8 @@ public class ProfileService {
     private final AuthenticationManager authenticationManager;
     private final JWTUtil jwtUtil;
 
-    @Value("${app.activation.url}")
-    private String activationURL;
+    @Value("${quantum.save.frontend.url}")
+    private String frontendUrl;
 
     public ProfileDTO registerProfile(ProfileDTO profileDTO) {
 
@@ -51,7 +53,7 @@ public class ProfileService {
         // 4. Send activation email
         // Try to send activation email, but don't kill the request if it fails
         try {
-            String activationLink = activationURL + "/api/v1.0/activate?token=" + newProfile.getActivationToken();
+            String activationLink = frontendUrl + "/verify-email?token=" + newProfile.getActivationToken();
             String subject = "Activate Your Quantum Save Account";
 
             String body = "Hello " + newProfile.getFullName() + ",\n\n" +
@@ -102,6 +104,7 @@ public class ProfileService {
         return profileRepository.findByActivationToken(activationToken)
                 .map(profile -> {
                     profile.setIsActive(true);
+                    profile.setActivationToken(null);
                     profileRepository.save(profile);
                     return true;
                 }).orElse(false);
@@ -138,17 +141,61 @@ public class ProfileService {
 
     }
 
-    public Map<String, Object> authenticateAndGenerateToken(AuthDTO authDTO) {
+    public AuthResponseDTO authenticateAndGenerateToken(AuthDTO authDTO) {
         try {
-            authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(authDTO.getEmail(), authDTO.getPassword()));
-            // Generate JWT Token
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(authDTO.getEmail(), authDTO.getPassword())
+            );
+
+            ProfileEntity profile = profileRepository.findByEmail(authDTO.getEmail())
+                    .orElseThrow(() -> new RuntimeException("Invalid email or password"));
+
             String token = jwtUtil.generateToken(authDTO.getEmail());
-            return Map.of(
-                    "token", token,
-                     "user" , getPublicProfile(authDTO.getEmail()));
+
+            boolean isActive = Boolean.TRUE.equals(profile.getIsActive());
+
+            String msg = isActive
+                    ? "Login successful."
+                    : "Account not activated yet. You can use the app, but please verify your email. If you didn't receive it, use 'Resend verification'.";
+
+            return AuthResponseDTO.builder()
+                    .token(token)
+                    .user(getPublicProfile(authDTO.getEmail()))
+                    .isActive(isActive)
+                    .message(msg)
+                    .build();
 
         } catch (Exception e) {
             throw new RuntimeException("Invalid email or password");
         }
     }
+
+
+    public void resendVerificationEmail(String email) {
+        // do NOT reveal whether the email exists
+        ProfileEntity profile = profileRepository.findByEmail(email).orElse(null);
+        if (profile == null) {
+            return; // silently ignore
+        }
+
+        if (Boolean.TRUE.equals(profile.getIsActive())) {
+            return; // already active, nothing to resend
+        }
+
+        // rotate token each resend
+        String newToken = UUID.randomUUID().toString();
+        profile.setActivationToken(newToken);
+        profileRepository.save(profile);
+
+        String activationLink = frontendUrl + "/verify-email?token=" + newToken;
+
+        try {
+            emailService.sendActivationEmail(profile.getEmail(), profile.getFullName(), activationLink);
+        } catch (Exception e) {
+            // don't block anything if Brevo fails
+            System.out.println("Failed to resend activation email: " + e.getMessage());
+        }
+    }
+
+
 }

@@ -5,6 +5,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.format.TextStyle;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -22,18 +24,17 @@ public class EmailExpenseExcelService {
             throw new RuntimeException("User email not found");
         }
 
-        byte[] excelBytes =
-                excelExportService.exportCurrentMonthExpenseExcelForCurrentUser();
+        byte[] excelBytes = excelExportService.exportCurrentMonthExpenseExcelForCurrentUser();
 
-        String filename = "expense_details_" + LocalDate.now() + ".xlsx";
-        String subject = "Your Expense Report (Excel)";
-        String body =
-                "Attached is your expense report for the current month.\n\n- Quantum Save";
+        LocalDate now = LocalDate.now();
+        String monthLabel = now.getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH) + " " + now.getYear();
 
-        emailService.sendEmailWithAttachment(
+        String filename = "expense_report_" + now + ".xlsx";
+
+        emailService.sendExpenseReportEmail(
                 toEmail,
-                subject,
-                body,
+                user.getFullName(),
+                monthLabel,
                 filename,
                 excelBytes
         );

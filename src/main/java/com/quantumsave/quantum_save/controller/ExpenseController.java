@@ -1,5 +1,6 @@
 package com.quantumsave.quantum_save.controller;
 
+import com.quantumsave.quantum_save.dto.ApiResponse;
 import com.quantumsave.quantum_save.dto.ExpenseDTO;
 import com.quantumsave.quantum_save.service.ExpenseService;
 import lombok.RequiredArgsConstructor;
@@ -29,8 +30,17 @@ public class ExpenseController {
     }
 
     @DeleteMapping("/{expenseId}")
-    public ResponseEntity<Void> deleteExpense(@PathVariable Long expenseId) {
+    public ResponseEntity<ApiResponse<Object>> deleteExpense(@PathVariable Long expenseId) {
         expenseService.deleteExpense(expenseId);
-        return ResponseEntity.noContent().build();
+
+        return ResponseEntity.ok(
+                ApiResponse.builder()
+                        .success(true)
+                        .message("Expense deleted successfully")
+                        .data(java.util.Map.of("expenseId", expenseId))
+                        .timestamp(java.time.Instant.now())
+                        .build()
+        );
     }
+
 }

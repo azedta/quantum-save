@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.UUID;
 
 @Slf4j
 @Component
@@ -33,48 +35,71 @@ public class JwtRequestFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
 
-        // ✅ Let preflight through
+        // ✅ Let preflight through (no auth)
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        final String path = request.getRequestURI();
-        log.info("JwtRequestFilter hit: {}", path);
-
-        // ✅ Try both header casings
-        String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
-        if (authHeader == null) authHeader = request.getHeader("authorization");
-
-        // No bearer token => continue (security will block protected routes)
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            filterChain.doFilter(request, response);
-            return;
+        // Request correlation id (use existing if you already pass one from FE/gateway)
+        String requestId = request.getHeader("X-Request-Id");
+        if (requestId == null || requestId.isBlank()) {
+            requestId = UUID.randomUUID().toString().substring(0, 8);
         }
-
-        String jwt = authHeader.substring(7);
-        String email;
+        MDC.put("rid", requestId);
 
         try {
-            email = jwtUtil.extractUsername(jwt);
-        } catch (Exception e) {
-            log.warn("JWT parse failed: {}", e.getMessage());
-            filterChain.doFilter(request, response);
-            return;
-        }
+            final String path = request.getRequestURI();
+            final String method = request.getMethod();
 
-        // Already authenticated => continue
-        if (email == null || SecurityContextHolder.getContext().getAuthentication() != null) {
-            filterChain.doFilter(request, response);
-            return;
-        }
+            // Keep this at DEBUG only (too noisy for INFO in prod)
+            if (log.isDebugEnabled()) {
+                log.debug("JWT filter: {} {}", method, path);
+            }
 
-        try {
-            UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+            // Already authenticated => continue
+            if (SecurityContextHolder.getContext().getAuthentication() != null) {
+                filterChain.doFilter(request, response);
+                return;
+            }
 
-            boolean valid = jwtUtil.validateToken(jwt, userDetails);
+            // Read auth header (no need to check lowercase separately; servlet containers are case-insensitive)
+            String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
 
-            if (valid) {
+            // No bearer token => continue (Security will block protected routes)
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+
+            final String jwt = authHeader.substring(7);
+
+            final String email;
+            try {
+                email = jwtUtil.extractUsername(jwt);
+            } catch (Exception e) {
+                // Don’t leak token or user data. Just state “bad token”.
+                log.warn("JWT rejected: cannot parse token");
+                filterChain.doFilter(request, response);
+                return;
+            }
+
+            if (email == null || email.isBlank()) {
+                log.warn("JWT rejected: missing subject");
+                filterChain.doFilter(request, response);
+                return;
+            }
+
+            try {
+                UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+
+                boolean valid = jwtUtil.validateToken(jwt, userDetails);
+                if (!valid) {
+                    log.warn("JWT rejected: invalid/expired token");
+                    filterChain.doFilter(request, response);
+                    return;
+                }
+
                 UsernamePasswordAuthenticationToken authToken =
                         new UsernamePasswordAuthenticationToken(
                                 userDetails,
@@ -85,16 +110,23 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                 authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authToken);
 
-                // ✅ This is the most important confirmation log
-                log.info("JWT OK → authenticated user: {}", userDetails.getUsername());
-            } else {
-                log.warn("JWT invalid for user: {}", email);
+                // ✅ Optional: confirm auth was set without identifying the user
+                if (log.isDebugEnabled()) {
+                    log.debug("JWT accepted: security context authenticated");
+                }
+
+            } catch (Exception e) {
+                // Don’t log email. Don’t log stacktrace unless debug.
+                log.warn("JWT rejected: auth setup failed");
+                if (log.isDebugEnabled()) {
+                    log.debug("JWT auth setup failure details", e);
+                }
             }
 
-        } catch (Exception e) {
-            log.warn("Auth setup failed for {}: {}", email, e.getMessage());
-        }
+            filterChain.doFilter(request, response);
 
-        filterChain.doFilter(request, response);
+        } finally {
+            MDC.remove("rid");
+        }
     }
 }

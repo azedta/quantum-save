@@ -5,19 +5,19 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 
 import java.util.List;
 
@@ -46,25 +46,24 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-                // ✅ Make auth failures clear (401) instead of confusing 403
+                // Clear auth errors
                 .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint((req, res, e) ->
-                                res.sendError(401, "Unauthorized"))
-                        .accessDeniedHandler((req, res, e) ->
-                                res.sendError(403, "Forbidden"))
+                        .authenticationEntryPoint((req, res, e) -> res.sendError(401, "Unauthorized"))
+                        .accessDeniedHandler((req, res, e) -> res.sendError(403, "Forbidden"))
                 )
 
                 .authorizeHttpRequests(auth -> auth
-                        // ✅ Preflight
+                        // Preflight
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // ✅ Public endpoints (support both with and without /api/v1.0 prefix)
+                        // Public endpoints (support both with and without /api/v1.0 prefix)
                         .requestMatchers(
-                                "/login", "/register", "/activate", "/status", "/health",
-                                "/api/v1.0/login", "/api/v1.0/register", "/api/v1.0/activate", "/api/v1.0/status", "/api/v1.0/health"
+                                "/login", "/register", "/activate", "/resend-verification", "/status", "/health",
+                                "/api/v1.0/login", "/api/v1.0/register", "/api/v1.0/activate", "/api/v1.0/resend-verification",
+                                "/api/v1.0/status", "/api/v1.0/health"
                         ).permitAll()
 
-                        // ✅ Everything else requires JWT
+                        // Everything else requires JWT
                         .anyRequest().authenticated()
                 )
 
@@ -77,13 +76,18 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration cfg = new CorsConfiguration();
 
-        // your dev FE
-        cfg.setAllowedOrigins(List.of("http://localhost:5173"));
+        // Dev + Vercel (supports preview deployments too)
+        cfg.setAllowedOriginPatterns(List.of(
+                "http://localhost:5173",
+                "https://*.vercel.app"
+        ));
 
-        cfg.setAllowedMethods(List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
-        cfg.setAllowedHeaders(List.of("Authorization","Content-Type","Accept"));
+        cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        cfg.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
         cfg.setExposedHeaders(List.of("Content-Disposition"));
-        cfg.setAllowCredentials(true);
+
+        // JWT in Authorization header -> no cookies needed
+        cfg.setAllowCredentials(false);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", cfg);

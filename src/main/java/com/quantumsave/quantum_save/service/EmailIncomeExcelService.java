@@ -5,6 +5,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.format.TextStyle;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -24,10 +26,17 @@ public class EmailIncomeExcelService {
 
         byte[] excelBytes = excelExportService.exportCurrentMonthIncomeExcelForCurrentUser();
 
-        String filename = "income_details_" + LocalDate.now() + ".xlsx";
-        String subject = "Your Income Report (Excel)";
-        String body = "Attached is your income report for the current month.\n\n- Quantum Save";
+        LocalDate now = LocalDate.now();
+        String monthLabel = now.getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH) + " " + now.getYear();
 
-        emailService.sendEmailWithAttachment(toEmail, subject, body, filename, excelBytes);
+        String filename = "income_report_" + now + ".xlsx";
+
+        emailService.sendIncomeReportEmail(
+                toEmail,
+                user.getFullName(),
+                monthLabel,
+                filename,
+                excelBytes
+        );
     }
 }

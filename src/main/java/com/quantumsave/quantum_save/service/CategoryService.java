@@ -46,13 +46,28 @@ public class CategoryService {
     // Update Category
     public CategoryDTO updateCategory(Long categoryId, CategoryDTO categoryDTO) {
         ProfileEntity profile = profileService.getCurrentProfile();
-        CategoryEntity existingCategory = categoryRepository.findByIdAndProfileId(categoryId, profile.getId())
+
+        CategoryEntity existingCategory = categoryRepository
+                .findByIdAndProfileId(categoryId, profile.getId())
                 .orElseThrow(() -> new RuntimeException("Category not found"));
-        existingCategory.setName(categoryDTO.getName());
-        existingCategory.setIcon(categoryDTO.getIcon());
+
+        // name
+        if (categoryDTO.getName() != null) {
+            existingCategory.setName(categoryDTO.getName().trim());
+        }
+
+        // icon
+        if (categoryDTO.getIcon() != null) {
+            existingCategory.setIcon(categoryDTO.getIcon());
+        }
+
+        // ✅ type (THIS WAS MISSING)
+        if (categoryDTO.getType() != null) {
+            existingCategory.setType(categoryDTO.getType().trim().toLowerCase()); // "income" / "expense"
+        }
+
         existingCategory = categoryRepository.save(existingCategory);
         return toDTO(existingCategory);
-
     }
 
     // HELPER Methods :

@@ -1,6 +1,7 @@
 package com.quantumsave.quantum_save.controller;
 
 
+import com.quantumsave.quantum_save.dto.ApiResponse;
 import com.quantumsave.quantum_save.dto.IncomeDTO;
 import com.quantumsave.quantum_save.service.IncomeService;
 import lombok.RequiredArgsConstructor;
@@ -31,9 +32,18 @@ public class IncomeController {
     }
 
     @DeleteMapping("/{incomeId}")
-    public ResponseEntity<Void> deleteIncome(@PathVariable Long incomeId) {
+    public ResponseEntity<ApiResponse<Object>> deleteIncome(@PathVariable Long incomeId) {
         incomeService.deleteIncome(incomeId);
-        return ResponseEntity.noContent().build();
+
+        return ResponseEntity.ok(
+                ApiResponse.builder()
+                        .success(true)
+                        .message("Income deleted successfully")
+                        .data(java.util.Map.of("incomeId", incomeId))
+                        .timestamp(java.time.Instant.now())
+                        .build()
+        );
     }
+
 
 }
