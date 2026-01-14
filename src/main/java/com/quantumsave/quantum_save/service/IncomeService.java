@@ -79,7 +79,7 @@ public class IncomeService {
     private IncomeEntity toEntity(IncomeDTO incomeDTO, ProfileEntity profile, CategoryEntity category) {
         return IncomeEntity.builder()
                 .name(incomeDTO.getName())
-                .icon(incomeDTO.getIcon())
+                .icon(resolveIcon(incomeDTO.getIcon(), category)) // ✅ inherit from category if missing
                 .amount(incomeDTO.getAmount())
                 .date(incomeDTO.getDate())
                 .category(category)
@@ -87,11 +87,12 @@ public class IncomeService {
                 .build();
     }
 
+
     private IncomeDTO toDTO(IncomeEntity incomeEntity) {
         return IncomeDTO.builder()
                 .id(incomeEntity.getId())
                 .name(incomeEntity.getName())
-                .icon(incomeEntity.getIcon())
+                .icon(resolveIcon(incomeEntity.getIcon(), incomeEntity.getCategory())) // ✅ fallback in response
                 .categoryId(incomeEntity.getCategory() != null ? incomeEntity.getCategory().getId() : null)
                 .categoryName(incomeEntity.getCategory() != null ? incomeEntity.getCategory().getName() : "N/A")
                 .amount(incomeEntity.getAmount())
@@ -100,5 +101,17 @@ public class IncomeService {
                 .updatedAt(incomeEntity.getUpdatedAt())
                 .build();
     }
+
+
+    private String resolveIcon(String incomingIcon, CategoryEntity category) {
+        if (incomingIcon != null && !incomingIcon.trim().isEmpty()) {
+            return incomingIcon.trim();
+        }
+        if (category != null && category.getIcon() != null && !category.getIcon().trim().isEmpty()) {
+            return category.getIcon().trim();
+        }
+        return null;
+    }
+
 
 }

@@ -87,7 +87,7 @@ public class ExpenseService {
     private ExpenseEntity toEntity(ExpenseDTO expenseDTO, ProfileEntity profile, CategoryEntity category) {
         return ExpenseEntity.builder()
                 .name(expenseDTO.getName())
-                .icon(expenseDTO.getIcon())
+                .icon(resolveIcon(expenseDTO.getIcon(), category)) // ✅ inherit from category if missing
                 .amount(expenseDTO.getAmount())
                 .date(expenseDTO.getDate())
                 .category(category)
@@ -95,17 +95,32 @@ public class ExpenseService {
                 .build();
     }
 
+
     private ExpenseDTO toDTO(ExpenseEntity expenseEntity) {
+        CategoryEntity category = expenseEntity.getCategory();
+
         return ExpenseDTO.builder()
                 .id(expenseEntity.getId())
                 .name(expenseEntity.getName())
-                .icon(expenseEntity.getIcon())
-                .categoryId(expenseEntity.getCategory() != null ? expenseEntity.getCategory().getId() : null)
-                .categoryName(expenseEntity.getCategory() != null ? expenseEntity.getCategory().getName() : "N/A")
+                .icon(resolveIcon(expenseEntity.getIcon(), category)) // ✅ fallback at response level too
+                .categoryId(category != null ? category.getId() : null)
+                .categoryName(category != null ? category.getName() : "N/A")
                 .amount(expenseEntity.getAmount())
                 .date(expenseEntity.getDate())
                 .createdAt(expenseEntity.getCreatedAt())
                 .updatedAt(expenseEntity.getUpdatedAt())
                 .build();
     }
+
+
+    private String resolveIcon(String incomingIcon, CategoryEntity category) {
+        if (incomingIcon != null && !incomingIcon.trim().isEmpty()) {
+            return incomingIcon.trim();
+        }
+        if (category != null && category.getIcon() != null && !category.getIcon().trim().isEmpty()) {
+            return category.getIcon().trim();
+        }
+        return null;
+    }
+
 }
